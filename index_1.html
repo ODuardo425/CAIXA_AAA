@@ -1,0 +1,1093 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Controle de Caixa</title>
+  <meta name="description" content="Controle de caixa diário — despesas, entradas, saldo e cash em caixa." />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,700;1,9..144,500&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+  <style>
+    :root {
+      --bg: #f5f1ea;
+      --paper: #fbf8f2;
+      --ink: #1a1a1a;
+      --ink-soft: #555047;
+      --muted: #8a8378;
+      --rule: #d9d2c3;
+      --accent: #1f5d3a;     /* verde contábil */
+      --accent-soft: #dfeae2;
+      --danger: #8a2a2a;
+      --danger-soft: #f3dede;
+      --pix: #2a4d8a;
+      --pix-soft: #dde6f2;
+      --cash: #1f5d3a;
+      --cash-soft: #dfeae2;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: 'Inter', system-ui, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body {
+      background-image:
+        radial-gradient(circle at 20% 0%, rgba(31, 93, 58, 0.05), transparent 40%),
+        radial-gradient(circle at 80% 100%, rgba(42, 77, 138, 0.04), transparent 40%);
+      min-height: 100vh;
+    }
+
+    .serif { font-family: 'Fraunces', 'Times New Roman', serif; }
+    .mono  { font-family: 'JetBrains Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+
+    .paper {
+      background: var(--paper);
+      border: 1px solid var(--rule);
+      box-shadow:
+        0 1px 0 rgba(0,0,0,0.02),
+        0 30px 60px -30px rgba(80, 60, 30, 0.18);
+    }
+
+    /* ruled paper feel */
+    .ruled-bg {
+      background-image: linear-gradient(to bottom, transparent 0, transparent calc(100% - 1px), var(--rule) calc(100% - 1px));
+    }
+
+    input, select, textarea {
+      font-family: inherit;
+      font-size: inherit;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: inherit;
+      width: 100%;
+    }
+
+    .field-underline {
+      border-bottom: 1px dashed var(--rule);
+      transition: border-color 150ms ease;
+    }
+    .field-underline:focus-within {
+      border-bottom-color: var(--accent);
+      border-bottom-style: solid;
+    }
+
+    .cell-input {
+      padding: 0.5rem 0.75rem;
+      background: rgba(255,255,255,0.5);
+      border: 1px solid var(--rule);
+      border-radius: 4px;
+      transition: border-color 120ms ease, background 120ms ease;
+    }
+    .cell-input:focus-within {
+      border-color: var(--accent);
+      background: #fff;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.2rem 0.55rem;
+      border-radius: 999px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .pill-cash { background: var(--cash-soft); color: var(--cash); }
+    .pill-pix  { background: var(--pix-soft);  color: var(--pix); }
+    .pill-card { background: #f0e6d6; color: #6b4a16; }
+
+    .seg {
+      display: inline-flex;
+      background: #ece5d6;
+      border-radius: 6px;
+      padding: 2px;
+      gap: 2px;
+    }
+    .seg button {
+      font: inherit;
+      border: none;
+      cursor: pointer;
+      padding: 0.3rem 0.7rem;
+      border-radius: 4px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+      color: var(--ink-soft);
+      background: transparent;
+      transition: all 120ms ease;
+    }
+    .seg button:hover { color: var(--ink); }
+    .seg button.active-cash { background: var(--cash); color: #fff; }
+    .seg button.active-pix  { background: var(--pix);  color: #fff; }
+    .seg button.active-card { background: #6b4a16; color: #fff; }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      font-family: inherit;
+      font-size: 0.82rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      padding: 0.55rem 0.95rem;
+      border-radius: 6px;
+      border: 1px solid var(--rule);
+      background: #fff;
+      color: var(--ink);
+      cursor: pointer;
+      transition: all 120ms ease;
+    }
+    .btn:hover {
+      background: var(--paper);
+      border-color: var(--ink-soft);
+    }
+    .btn-primary {
+      background: var(--ink);
+      color: var(--paper);
+      border-color: var(--ink);
+    }
+    .btn-primary:hover {
+      background: var(--accent);
+      border-color: var(--accent);
+    }
+    .btn-ghost {
+      background: transparent;
+      border-color: transparent;
+      color: var(--ink-soft);
+      padding: 0.4rem 0.6rem;
+    }
+    .btn-ghost:hover {
+      color: var(--danger);
+      background: var(--danger-soft);
+    }
+
+    .tag-line {
+      letter-spacing: 0.32em;
+      text-transform: uppercase;
+      font-size: 0.66rem;
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    .stamp {
+      display: inline-block;
+      transform: rotate(-3deg);
+      border: 2px solid var(--accent);
+      color: var(--accent);
+      padding: 0.2rem 0.6rem;
+      font-weight: 700;
+      letter-spacing: 0.18em;
+      font-size: 0.7rem;
+      border-radius: 2px;
+      opacity: 0.85;
+    }
+
+    .row-anim {
+      animation: rowIn 200ms ease;
+    }
+    @keyframes rowIn {
+      from { opacity: 0; transform: translateY(-4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .total-row {
+      background: linear-gradient(to right, transparent, rgba(31, 93, 58, 0.06), transparent);
+    }
+
+    .double-rule {
+      border-top: 1px solid var(--ink);
+      border-bottom: 3px double var(--ink);
+      padding-top: 0.5rem;
+      padding-bottom: 0.5rem;
+    }
+
+    @media print {
+      body { background: white; }
+      .no-print { display: none !important; }
+      .paper { box-shadow: none; border: none; }
+    }
+
+    /* mobile tweaks */
+    @media (max-width: 720px) {
+      .seg button { padding: 0.3rem 0.5rem; }
+      .hide-mobile { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useMemo, useRef } = React;
+
+    /* ----------------------------- helpers ----------------------------- */
+
+    const STORAGE_KEY = "caixa-aaa-state-v1";
+
+    const fmtBRL = (n) =>
+      new Intl.NumberFormat("pt-BR", {
+        style: "currency",
+        currency: "BRL",
+      }).format(Number.isFinite(n) ? n : 0);
+
+    const todayISO = () => {
+      const d = new Date();
+      const off = d.getTimezoneOffset();
+      const local = new Date(d.getTime() - off * 60000);
+      return local.toISOString().slice(0, 10);
+    };
+
+    const fmtDateBR = (iso) => {
+      if (!iso) return "";
+      const [y, m, d] = iso.split("-");
+      return `${d}/${m}/${y}`;
+    };
+
+    const uid = () => Math.random().toString(36).slice(2, 9);
+
+    const newExpense = (descricao = "") => ({
+      id: uid(),
+      descricao,
+      valor: "",
+      metodo: "cash", // cash | pix
+    });
+
+    const newIncome = (descricao = "", metodo = "cash") => ({
+      id: uid(),
+      descricao,
+      valor: "",
+      metodo, // cash | cartao | pix
+    });
+
+    const defaultState = () => ({
+      data: todayISO(),
+      responsavel: "",
+      troco: "",
+      despesas: [
+        newExpense("Salgado"),
+        newExpense("Mercado"),
+        newExpense("Pessoal"),
+        newExpense("Adel"),
+        newExpense("Almoço"),
+      ],
+      entradas: [
+        newIncome("Entrada Cash", "cash"),
+        newIncome("Entrada Cartão", "cartao"),
+        newIncome("Entrada Pix", "pix"),
+      ],
+      observacoes: "",
+    });
+
+    const loadState = () => {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return defaultState();
+        const parsed = JSON.parse(raw);
+        // sanity merge
+        return { ...defaultState(), ...parsed };
+      } catch {
+        return defaultState();
+      }
+    };
+
+    const num = (v) => {
+      if (typeof v === "number") return v;
+      if (!v) return 0;
+      const cleaned = String(v).replace(/\./g, "").replace(",", ".");
+      const n = parseFloat(cleaned);
+      return Number.isFinite(n) ? n : 0;
+    };
+
+    /* ----------------------------- icons ----------------------------- */
+
+    const Icon = ({ name, size = 16 }) => {
+      const common = {
+        width: size,
+        height: size,
+        viewBox: "0 0 24 24",
+        fill: "none",
+        stroke: "currentColor",
+        strokeWidth: 1.6,
+        strokeLinecap: "round",
+        strokeLinejoin: "round",
+      };
+      switch (name) {
+        case "plus":
+          return <svg {...common}><path d="M12 5v14M5 12h14" /></svg>;
+        case "trash":
+          return <svg {...common}><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" /></svg>;
+        case "print":
+          return <svg {...common}><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z" /></svg>;
+        case "reset":
+          return <svg {...common}><path d="M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5" /></svg>;
+        case "wallet":
+          return <svg {...common}><path d="M21 12V7a2 2 0 0 0-2-2H5a2 2 0 0 0 0 4h16v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7" /><circle cx="17" cy="13" r="1" /></svg>;
+        case "download":
+          return <svg {...common}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" /></svg>;
+      }
+      return null;
+    };
+
+    /* ----------------------------- app ----------------------------- */
+
+    function App() {
+      const [state, setState] = useState(loadState);
+
+      // persist
+      useEffect(() => {
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch {}
+      }, [state]);
+
+      /* derived totals */
+      const totals = useMemo(() => {
+        const troco = num(state.troco);
+
+        let despesasCash = 0;
+        let despesasPix = 0;
+        for (const e of state.despesas) {
+          const v = num(e.valor);
+          if (e.metodo === "cash") despesasCash += v;
+          else despesasPix += v;
+        }
+        const totalDespesas = despesasCash + despesasPix;
+
+        let entradaCash = 0;
+        let entradaCartao = 0;
+        let entradaPix = 0;
+        for (const e of state.entradas) {
+          const v = num(e.valor);
+          if (e.metodo === "cash") entradaCash += v;
+          else if (e.metodo === "cartao") entradaCartao += v;
+          else if (e.metodo === "pix") entradaPix += v;
+        }
+        const totalEntradas = entradaCash + entradaCartao + entradaPix;
+
+        // saldo final = troco + entradas - despesas (todas)
+        const saldoFinal = troco + totalEntradas - totalDespesas;
+
+        // cash em caixa = troco + entradaCash - despesasCash
+        const cashEmCaixa = troco + entradaCash - despesasCash;
+
+        return {
+          troco,
+          totalDespesas,
+          despesasCash,
+          despesasPix,
+          totalEntradas,
+          entradaCash,
+          entradaCartao,
+          entradaPix,
+          saldoFinal,
+          cashEmCaixa,
+        };
+      }, [state]);
+
+      /* mutators */
+      const update = (patch) => setState((s) => ({ ...s, ...patch }));
+      const updateExpense = (id, patch) =>
+        setState((s) => ({
+          ...s,
+          despesas: s.despesas.map((e) => (e.id === id ? { ...e, ...patch } : e)),
+        }));
+      const removeExpense = (id) =>
+        setState((s) => ({ ...s, despesas: s.despesas.filter((e) => e.id !== id) }));
+      const addExpense = () =>
+        setState((s) => ({ ...s, despesas: [...s.despesas, newExpense()] }));
+
+      const updateIncome = (id, patch) =>
+        setState((s) => ({
+          ...s,
+          entradas: s.entradas.map((e) => (e.id === id ? { ...e, ...patch } : e)),
+        }));
+      const removeIncome = (id) =>
+        setState((s) => ({ ...s, entradas: s.entradas.filter((e) => e.id !== id) }));
+      const addIncome = () =>
+        setState((s) => ({ ...s, entradas: [...s.entradas, newIncome()] }));
+
+      const resetAll = () => {
+        if (confirm("Limpar todos os dados do dia? Esta ação não pode ser desfeita."))
+          setState(defaultState());
+      };
+
+      const printPage = () => window.print();
+
+      const exportPDF = () => {
+        if (!window.jspdf) {
+          alert("Biblioteca de PDF ainda carregando, tente em 1 segundo.");
+          return;
+        }
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
+
+        // ---- layout constants (mimick the spreadsheet) ----
+        const PAGE_W = 210;
+        const MARGIN_X = 22;
+        const X0 = MARGIN_X;
+        const X1 = PAGE_W - MARGIN_X;       // right edge
+        const W  = X1 - X0;                  // total table width
+        const COL_SPLIT = X0 + W * 0.55;     // label | value column split
+        let y = 18;
+
+        const BORDER = 0.6;                  // medium border thickness
+        const COLOR_BLACK = [0, 0, 0];
+        const COLOR_WHITE = [255, 255, 255];
+
+        const setFont = (style = "normal", size = 10) => {
+          doc.setFont("helvetica", style);
+          doc.setFontSize(size);
+        };
+
+        // helper: draw a bordered rect
+        const rect = (x, yy, w, h) => {
+          doc.setDrawColor(0);
+          doc.setLineWidth(BORDER);
+          doc.rect(x, yy, w, h, "S");
+        };
+
+        // helper: filled black rect
+        const fillRect = (x, yy, w, h, fill = COLOR_BLACK) => {
+          doc.setFillColor(...fill);
+          doc.setDrawColor(0);
+          doc.setLineWidth(BORDER);
+          doc.rect(x, yy, w, h, "FD");
+        };
+
+        // helper: text in cell, vertically centered-ish
+        const cellText = (txt, x, yy, h, opts = {}) => {
+          const {
+            align = "left",
+            color = COLOR_BLACK,
+            fontStyle = "normal",
+            fontSize = 10,
+            padX = 2,
+            cellW = null,
+          } = opts;
+          setFont(fontStyle, fontSize);
+          doc.setTextColor(...color);
+          let tx = x + padX;
+          if (align === "center" && cellW != null) tx = x + cellW / 2;
+          if (align === "right"  && cellW != null) tx = x + cellW - padX;
+          // approx vertical center: baseline at y + h/2 + fontSize*0.35/2.83
+          const ty = yy + h / 2 + (fontSize * 0.35) / 2.83;
+          doc.text(String(txt ?? ""), tx, ty, { align });
+        };
+
+        // ----------- top blank header band (logo space) -----------
+        const HDR_H = 22;
+        rect(X0, y, W, HDR_H);
+        y += HDR_H;
+
+        // ----------- DATA row -----------
+        const META_H = 8;
+        rect(X0, y, COL_SPLIT - X0, META_H);
+        rect(COL_SPLIT, y, X1 - COL_SPLIT, META_H);
+        cellText("DATA", X0, y, META_H, { fontStyle: "bold", fontSize: 11, padX: 3 });
+        cellText(fmtDateBR(state.data) || "", COL_SPLIT, y, META_H, {
+          align: "center", fontStyle: "bold", fontSize: 11, cellW: X1 - COL_SPLIT,
+        });
+        y += META_H;
+
+        // ----------- RESPONSÁVEL row -----------
+        rect(X0, y, COL_SPLIT - X0, META_H);
+        rect(COL_SPLIT, y, X1 - COL_SPLIT, META_H);
+        cellText("RESPONSÁVEL", X0, y, META_H, { fontStyle: "bold", fontSize: 11, padX: 3 });
+        cellText(state.responsavel || "", COL_SPLIT, y, META_H, {
+          align: "center", fontStyle: "bold", fontSize: 11, cellW: X1 - COL_SPLIT,
+        });
+        y += META_H;
+
+        // ----------- SALDO row (label only spans both columns visually) -----------
+        rect(X0, y, COL_SPLIT - X0, META_H);
+        rect(COL_SPLIT, y, X1 - COL_SPLIT, META_H);
+        cellText("SALDO", X0, y, META_H, { fontSize: 11, padX: 3 });
+        y += META_H;
+
+        // ----------- SALDO INICIAL (TROCO) row -----------
+        rect(X0, y, COL_SPLIT - X0, META_H);
+        rect(COL_SPLIT, y, X1 - COL_SPLIT, META_H);
+        cellText("SALDO INICIAL (TROCO)", X0, y, META_H, { fontSize: 9, padX: 3 });
+        cellText(fmtBRL(totals.troco), COL_SPLIT, y, META_H, {
+          align: "center", fontSize: 11, cellW: X1 - COL_SPLIT,
+        });
+        y += META_H;
+
+        // ----------- DESPESAS DIVERSAS banner -----------
+        const BANNER_H = 14;
+        fillRect(X0, y, W, BANNER_H);
+        cellText("DESPESAS DIVERSAS", X0, y, BANNER_H, {
+          align: "center", color: COLOR_WHITE, fontStyle: "bold", fontSize: 18, cellW: W,
+        });
+        y += BANNER_H;
+
+        // ----------- expense rows -----------
+        const ROW_H = 8.5;
+        const expenseList = state.despesas;
+        for (const e of expenseList) {
+          rect(X0, y, COL_SPLIT - X0, ROW_H);
+          rect(COL_SPLIT, y, X1 - COL_SPLIT, ROW_H);
+          let label = (e.descricao || "").toUpperCase();
+          if (e.metodo === "pix") label = label ? `${label} (PIX)` : "(PIX)";
+          cellText(label, X0, y, ROW_H, {
+            align: "center", fontStyle: "bold", fontSize: 11, cellW: COL_SPLIT - X0,
+          });
+          const v = num(e.valor);
+          cellText(v ? fmtBRL(v) : "", COL_SPLIT, y, ROW_H, {
+            align: "center", fontSize: 11, cellW: X1 - COL_SPLIT,
+          });
+          y += ROW_H;
+        }
+
+        // ----------- TOTAL DE DESPESAS -----------
+        const TOTAL_H = 11;
+        rect(X0, y, COL_SPLIT - X0, TOTAL_H);
+        rect(COL_SPLIT, y, X1 - COL_SPLIT, TOTAL_H);
+        cellText("TOTAL DE DESPESAS", X0, y, TOTAL_H, {
+          align: "center", fontSize: 11, cellW: COL_SPLIT - X0,
+        });
+        cellText(fmtBRL(totals.totalDespesas), COL_SPLIT, y, TOTAL_H, {
+          align: "center", fontStyle: "bold", fontSize: 16, cellW: X1 - COL_SPLIT,
+        });
+        y += TOTAL_H;
+
+        // small gap
+        y += 2;
+
+        // ----------- ENTRADAS DIVERSAS banner -----------
+        fillRect(X0, y, W, BANNER_H);
+        cellText("ENTRADAS DIVERSAS", X0, y, BANNER_H, {
+          align: "center", color: COLOR_WHITE, fontStyle: "bold", fontSize: 18, cellW: W,
+        });
+        y += BANNER_H;
+
+        // ----------- entry rows: aggregate by method (CASH / CARTÃO / PIX) like the original -----------
+        const incomeByMethod = [
+          { label: "ENTRADA CASH",   value: totals.entradaCash },
+          { label: "ENTRADA CARTÃO", value: totals.entradaCartao },
+          { label: "ENTRADA PIX",    value: totals.entradaPix },
+        ];
+        for (const r of incomeByMethod) {
+          rect(X0, y, COL_SPLIT - X0, ROW_H);
+          rect(COL_SPLIT, y, X1 - COL_SPLIT, ROW_H);
+          cellText(r.label, X0, y, ROW_H, {
+            align: "center", fontStyle: "bold", fontSize: 11, cellW: COL_SPLIT - X0,
+          });
+          cellText(r.value ? fmtBRL(r.value) : "", COL_SPLIT, y, ROW_H, {
+            align: "center", fontSize: 11, cellW: X1 - COL_SPLIT,
+          });
+          y += ROW_H;
+        }
+
+        // ----------- TOTAL DE ENTRADAS -----------
+        rect(X0, y, COL_SPLIT - X0, TOTAL_H);
+        rect(COL_SPLIT, y, X1 - COL_SPLIT, TOTAL_H);
+        cellText("TOTAL DE ENTRADAS", X0, y, TOTAL_H, {
+          align: "center", fontSize: 11, cellW: COL_SPLIT - X0,
+        });
+        cellText(fmtBRL(totals.totalEntradas), COL_SPLIT, y, TOTAL_H, {
+          align: "center", fontSize: 14, cellW: X1 - COL_SPLIT,
+        });
+        y += TOTAL_H;
+
+        // ----------- SALDO FINAL block (label + small subtitle, value big) -----------
+        const SF_H = 14;
+        rect(X0, y, COL_SPLIT - X0, SF_H);
+        rect(COL_SPLIT, y, X1 - COL_SPLIT, SF_H);
+        // label area: stacked text
+        setFont("normal", 11);
+        doc.setTextColor(0);
+        doc.text("SALDO FINAL", X0 + (COL_SPLIT - X0) / 2, y + 6, { align: "center" });
+        setFont("bold", 7);
+        doc.text("ENTRADAS - DESPESAS + TROCO", X0 + (COL_SPLIT - X0) / 2, y + 11, { align: "center" });
+        cellText(fmtBRL(totals.saldoFinal), COL_SPLIT, y, SF_H, {
+          align: "center", fontStyle: "bold", fontSize: 18, cellW: X1 - COL_SPLIT,
+        });
+        y += SF_H;
+
+        // small gap
+        y += 2;
+
+        // ----------- OBSERVAÇÕES (full width header + body) -----------
+        const OBS_HEAD_H = 8;
+        rect(X0, y, W, OBS_HEAD_H);
+        cellText("OBSERVAÇÕES", X0, y, OBS_HEAD_H, {
+          align: "center", fontStyle: "bold", fontSize: 11, cellW: W,
+        });
+        y += OBS_HEAD_H;
+
+        const OBS_BODY_H = 14;
+        rect(X0, y, W, OBS_BODY_H);
+        if (state.observacoes) {
+          setFont("normal", 9);
+          doc.setTextColor(0);
+          const lines = doc.splitTextToSize(state.observacoes, W - 6);
+          doc.text(lines.slice(0, 3), X0 + 3, y + 5);
+        }
+        y += OBS_BODY_H;
+
+        // ----------- TOTAL DE CASH EM CAIXA (full width, label left, value right) -----------
+        const CASH_H = 14;
+        // single bordered row spanning full width
+        rect(X0, y, W, CASH_H);
+        // label (right-aligned in left portion)
+        setFont("bold", 13);
+        doc.setTextColor(0);
+        doc.text("TOTAL DE CASH EM CAIXA  =", X0 + W * 0.55 - 4, y + CASH_H / 2 + 2, { align: "right" });
+        // value (left-aligned in right portion, big)
+        setFont("bold", 18);
+        doc.text(fmtBRL(totals.cashEmCaixa), X0 + W * 0.55 + 4, y + CASH_H / 2 + 2.5, { align: "left" });
+        y += CASH_H;
+
+        // ----------- footer -----------
+        y += 4;
+        setFont("italic", 8);
+        doc.setTextColor(120);
+        const footer = `${fmtDateBR(state.data) || ""}${state.responsavel ? " · " + state.responsavel : ""}`;
+        if (footer.trim()) doc.text(footer, X0, y);
+        doc.text("Gerado em " + new Date().toLocaleString("pt-BR"), X1, y, { align: "right" });
+
+        // save
+        const dateForFile = (state.data || todayISO()).replace(/-/g, "");
+        doc.save(`caixa_${dateForFile}.pdf`);
+      };
+
+      /* -------------- render -------------- */
+
+      return (
+        <div className="min-h-screen w-full px-4 py-6 md:px-8 md:py-12">
+          <div className="max-w-5xl mx-auto">
+
+            {/* HEADER */}
+            <header className="flex flex-wrap items-end justify-between gap-4 mb-6 no-print">
+              <div>
+                <div className="tag-line">livro · caixa diário</div>
+                <h1 className="serif text-3xl md:text-4xl font-bold mt-1 leading-none">
+                  Controle de Caixa
+                </h1>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button className="btn btn-primary" onClick={exportPDF} title="Exportar PDF idêntico à planilha">
+                  <Icon name="download" /> Exportar PDF
+                </button>
+                <button className="btn" onClick={printPage} title="Imprimir página atual">
+                  <Icon name="print" /> Imprimir
+                </button>
+                <button className="btn btn-ghost" onClick={resetAll} title="Limpar tudo">
+                  <Icon name="reset" /> Reiniciar
+                </button>
+              </div>
+            </header>
+
+            {/* PAPER */}
+            <main className="paper rounded-sm p-5 md:p-10 relative">
+
+              {/* paper top stamp + title */}
+              <div className="flex items-start justify-between mb-8 flex-wrap gap-4">
+                <div>
+                  <div className="serif italic text-sm" style={{ color: "var(--muted)" }}>
+                    folha de movimento
+                  </div>
+                  <h2 className="serif text-2xl md:text-3xl font-bold mt-1">
+                    Caixa do Dia
+                  </h2>
+                </div>
+                <div className="stamp">aprovado</div>
+              </div>
+
+              {/* META: data, responsável, troco */}
+              <section className="grid grid-cols-1 md:grid-cols-3 gap-x-8 gap-y-4 mb-10">
+                <Field label="Data">
+                  <input
+                    type="date"
+                    value={state.data}
+                    onChange={(e) => update({ data: e.target.value })}
+                    className="mono py-1"
+                  />
+                </Field>
+                <Field label="Responsável">
+                  <input
+                    type="text"
+                    placeholder="Nome do responsável"
+                    value={state.responsavel}
+                    onChange={(e) => update({ responsavel: e.target.value })}
+                    className="py-1"
+                  />
+                </Field>
+                <Field label="Saldo inicial · troco">
+                  <CurrencyInput
+                    value={state.troco}
+                    onChange={(v) => update({ troco: v })}
+                  />
+                </Field>
+              </section>
+
+              {/* DESPESAS */}
+              <Section
+                title="Despesas Diversas"
+                subtitle="Cada lançamento pode ser pago em dinheiro ou pix"
+              >
+                <div className="space-y-1">
+                  <HeaderRow cols={["Descrição", "Método", "Valor", ""]} />
+                  {state.despesas.map((d) => (
+                    <ExpenseRow
+                      key={d.id}
+                      item={d}
+                      onChange={(patch) => updateExpense(d.id, patch)}
+                      onRemove={() => removeExpense(d.id)}
+                    />
+                  ))}
+                  <button
+                    onClick={addExpense}
+                    className="btn btn-ghost mt-2 no-print"
+                  >
+                    <Icon name="plus" /> Adicionar despesa
+                  </button>
+
+                  <TotalRow
+                    label="Total de despesas"
+                    value={totals.totalDespesas}
+                    breakdown={[
+                      { label: "cash", value: totals.despesasCash, kind: "cash" },
+                      { label: "pix",  value: totals.despesasPix,  kind: "pix" },
+                    ]}
+                  />
+                </div>
+              </Section>
+
+              {/* ENTRADAS */}
+              <Section
+                title="Entradas Diversas"
+                subtitle="Receitas do dia, separadas por forma de recebimento"
+              >
+                <div className="space-y-1">
+                  <HeaderRow cols={["Descrição", "Método", "Valor", ""]} />
+                  {state.entradas.map((d) => (
+                    <IncomeRow
+                      key={d.id}
+                      item={d}
+                      onChange={(patch) => updateIncome(d.id, patch)}
+                      onRemove={() => removeIncome(d.id)}
+                    />
+                  ))}
+                  <button
+                    onClick={addIncome}
+                    className="btn btn-ghost mt-2 no-print"
+                  >
+                    <Icon name="plus" /> Adicionar entrada
+                  </button>
+
+                  <TotalRow
+                    label="Total de entradas"
+                    value={totals.totalEntradas}
+                    breakdown={[
+                      { label: "cash",    value: totals.entradaCash,    kind: "cash" },
+                      { label: "cartão",  value: totals.entradaCartao, kind: "card" },
+                      { label: "pix",     value: totals.entradaPix,     kind: "pix" },
+                    ]}
+                  />
+                </div>
+              </Section>
+
+              {/* SALDO FINAL */}
+              <section className="mt-10 grid grid-cols-1 md:grid-cols-2 gap-6">
+                <BigTotal
+                  caption="Saldo Final"
+                  formula="troco + entradas − despesas"
+                  value={totals.saldoFinal}
+                  tone="dark"
+                />
+                <BigTotal
+                  caption="Cash em Caixa"
+                  formula="troco + entradas cash − despesas cash"
+                  value={totals.cashEmCaixa}
+                  tone="green"
+                  icon={<Icon name="wallet" size={18} />}
+                />
+              </section>
+
+              {/* OBSERVAÇÕES */}
+              <section className="mt-10">
+                <div className="tag-line mb-2">Observações</div>
+                <textarea
+                  rows={3}
+                  placeholder="Anotações livres do dia…"
+                  value={state.observacoes}
+                  onChange={(e) => update({ observacoes: e.target.value })}
+                  className="cell-input w-full serif italic"
+                  style={{ resize: "vertical", minHeight: "5rem" }}
+                />
+              </section>
+
+              {/* FOOTER */}
+              <footer className="mt-10 pt-4 flex flex-wrap items-center justify-between gap-3 text-sm" style={{ borderTop: "1px solid var(--rule)", color: "var(--muted)" }}>
+                <div className="serif italic">
+                  {fmtDateBR(state.data)}
+                  {state.responsavel ? ` · ${state.responsavel}` : ""}
+                </div>
+                <div className="mono text-xs">
+                  salvo automaticamente no navegador
+                </div>
+              </footer>
+            </main>
+
+            <p className="text-center mt-6 text-xs no-print" style={{ color: "var(--muted)" }}>
+              Os dados ficam apenas no seu dispositivo (localStorage). Nada é enviado para servidores.
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    /* --------------------- subcomponents --------------------- */
+
+    function Field({ label, children }) {
+      return (
+        <label className="block">
+          <div className="tag-line mb-1">{label}</div>
+          <div className="field-underline">{children}</div>
+        </label>
+      );
+    }
+
+    function HeaderRow({ cols }) {
+      return (
+        <div className="hidden md:grid grid-cols-[1fr_auto_140px_36px] gap-3 px-2 pb-1" style={{ color: "var(--muted)" }}>
+          {cols.map((c, i) => (
+            <div key={i} className="tag-line">{c}</div>
+          ))}
+        </div>
+      );
+    }
+
+    function CurrencyInput({ value, onChange, align = "left" }) {
+      // Permite vírgula brasileira; valor armazenado como string para preservar entrada
+      const handle = (e) => {
+        let v = e.target.value;
+        // mantém apenas dígitos, vírgula e ponto
+        v = v.replace(/[^\d,.\-]/g, "");
+        onChange(v);
+      };
+      return (
+        <div className="flex items-center gap-1">
+          <span className="mono text-xs" style={{ color: "var(--muted)" }}>R$</span>
+          <input
+            type="text"
+            inputMode="decimal"
+            placeholder="0,00"
+            value={value}
+            onChange={handle}
+            className={`mono py-1 ${align === "right" ? "text-right" : ""}`}
+          />
+        </div>
+      );
+    }
+
+    function MethodToggle({ value, onChange, options }) {
+      return (
+        <div className="seg">
+          {options.map((opt) => {
+            const active = value === opt.value;
+            const cls = active
+              ? opt.value === "cash" ? "active-cash"
+              : opt.value === "pix" ? "active-pix"
+              : "active-card"
+              : "";
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => onChange(opt.value)}
+                className={cls}
+              >
+                {opt.label}
+              </button>
+            );
+          })}
+        </div>
+      );
+    }
+
+    function ExpenseRow({ item, onChange, onRemove }) {
+      return (
+        <div className="row-anim grid grid-cols-[1fr_auto_36px] md:grid-cols-[1fr_auto_140px_36px] gap-2 md:gap-3 items-center py-1">
+          <div className="cell-input">
+            <input
+              type="text"
+              placeholder="Ex: Mercado, Almoço, Pessoal…"
+              value={item.descricao}
+              onChange={(e) => onChange({ descricao: e.target.value })}
+            />
+          </div>
+          <div className="md:order-none order-3 col-span-3 md:col-span-1 flex items-center justify-between md:justify-start">
+            <MethodToggle
+              value={item.metodo}
+              onChange={(v) => onChange({ metodo: v })}
+              options={[
+                { value: "cash", label: "Cash" },
+                { value: "pix",  label: "Pix" },
+              ]}
+            />
+            <span className="md:hidden mono text-sm ml-3">
+              {item.valor ? fmtBRL(num(item.valor)) : ""}
+            </span>
+          </div>
+          <div className="cell-input hide-mobile md:block">
+            <CurrencyInput
+              value={item.valor}
+              onChange={(v) => onChange({ valor: v })}
+              align="right"
+            />
+          </div>
+          <div className="md:hidden cell-input col-span-2">
+            <CurrencyInput
+              value={item.valor}
+              onChange={(v) => onChange({ valor: v })}
+              align="right"
+            />
+          </div>
+          <button className="btn btn-ghost no-print" onClick={onRemove} title="Remover" style={{ padding: "0.4rem" }}>
+            <Icon name="trash" />
+          </button>
+        </div>
+      );
+    }
+
+    function IncomeRow({ item, onChange, onRemove }) {
+      return (
+        <div className="row-anim grid grid-cols-[1fr_auto_36px] md:grid-cols-[1fr_auto_140px_36px] gap-2 md:gap-3 items-center py-1">
+          <div className="cell-input">
+            <input
+              type="text"
+              placeholder="Ex: Vendas, Pix recebido…"
+              value={item.descricao}
+              onChange={(e) => onChange({ descricao: e.target.value })}
+            />
+          </div>
+          <div className="md:order-none order-3 col-span-3 md:col-span-1 flex items-center justify-between md:justify-start">
+            <MethodToggle
+              value={item.metodo}
+              onChange={(v) => onChange({ metodo: v })}
+              options={[
+                { value: "cash",   label: "Cash" },
+                { value: "cartao", label: "Cartão" },
+                { value: "pix",    label: "Pix" },
+              ]}
+            />
+            <span className="md:hidden mono text-sm ml-3">
+              {item.valor ? fmtBRL(num(item.valor)) : ""}
+            </span>
+          </div>
+          <div className="cell-input hide-mobile md:block">
+            <CurrencyInput
+              value={item.valor}
+              onChange={(v) => onChange({ valor: v })}
+              align="right"
+            />
+          </div>
+          <div className="md:hidden cell-input col-span-2">
+            <CurrencyInput
+              value={item.valor}
+              onChange={(v) => onChange({ valor: v })}
+              align="right"
+            />
+          </div>
+          <button className="btn btn-ghost no-print" onClick={onRemove} title="Remover" style={{ padding: "0.4rem" }}>
+            <Icon name="trash" />
+          </button>
+        </div>
+      );
+    }
+
+    function Section({ title, subtitle, children }) {
+      return (
+        <section className="mt-8">
+          <div className="flex items-baseline justify-between flex-wrap gap-2 mb-3">
+            <div>
+              <h3 className="serif text-xl md:text-2xl font-semibold leading-tight">{title}</h3>
+              {subtitle && (
+                <p className="text-xs italic mt-0.5" style={{ color: "var(--muted)" }}>
+                  {subtitle}
+                </p>
+              )}
+            </div>
+          </div>
+          {children}
+        </section>
+      );
+    }
+
+    function TotalRow({ label, value, breakdown }) {
+      return (
+        <div className="total-row mt-4 pt-3" style={{ borderTop: "1px solid var(--rule)" }}>
+          <div className="flex items-center justify-between gap-3 px-2 flex-wrap">
+            <div className="flex items-center gap-3 flex-wrap">
+              <span className="serif italic" style={{ color: "var(--ink-soft)" }}>{label}</span>
+              <span className="flex items-center gap-2">
+                {breakdown.filter(b => b.value > 0).map((b) => (
+                  <span key={b.label} className={`pill pill-${b.kind}`}>
+                    {b.label} {fmtBRL(b.value)}
+                  </span>
+                ))}
+              </span>
+            </div>
+            <div className="mono text-lg md:text-xl font-semibold">
+              {fmtBRL(value)}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function BigTotal({ caption, formula, value, tone, icon }) {
+      const styles = tone === "green"
+        ? { background: "var(--accent-soft)", color: "var(--accent)", border: "var(--accent)" }
+        : { background: "var(--ink)", color: "var(--paper)", border: "var(--ink)" };
+
+      return (
+        <div
+          className="rounded-sm p-5 md:p-6"
+          style={{
+            background: styles.background,
+            color: styles.color,
+            border: `1px solid ${styles.border}`,
+          }}
+        >
+          <div className="flex items-center justify-between">
+            <div className="tag-line" style={{ color: tone === "green" ? "var(--accent)" : "rgba(251, 248, 242, 0.6)" }}>
+              {caption}
+            </div>
+            {icon && <span style={{ opacity: 0.7 }}>{icon}</span>}
+          </div>
+          <div className="mono font-semibold mt-3" style={{ fontSize: "clamp(1.6rem, 4vw, 2.4rem)", lineHeight: 1 }}>
+            {fmtBRL(value)}
+          </div>
+          <div className="serif italic mt-2 text-xs" style={{ opacity: 0.7 }}>
+            {formula}
+          </div>
+        </div>
+      );
+    }
+
+    /* mount */
+    const root = ReactDOM.createRoot(document.getElementById("root"));
+    root.render(<App />);
+  </script>
+</body>
+</html>
